@@ -5,6 +5,19 @@
 # Home page
 GET     /                           controllers.Application.index
 
+
+# Websocket endpoints
+GET     /echo                       controllers.Application.wsEcho
+GET     /echoAsync                  controllers.Application.wsEchoAsync
+GET     /time                       controllers.Application.wsTime
+GET     /pingpong                   controllers.Application.wsPingPong
+GET     /interleave                 controllers.Application.wsInterleave
+GET     /fromfile                   controllers.Application.wsFromFile
+GET     /wsWeather                  controllers.Application.wsWeatherProxy
+GET     /wsWeatherIntervals         controllers.Application.wsWeatherIntervals
+GET     /wsWithActor                controllers.Application.wsWithActor
+
+
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)
 
