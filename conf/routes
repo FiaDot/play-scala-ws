@@ -3,20 +3,26 @@
 # ~~~~
 
 # Home page
-GET     /                           controllers.Application.index
-
+#GET     /                           controllers.Application.index
 
 # Websocket endpoints
-GET     /echo                       controllers.Application.wsEcho
-GET     /echoAsync                  controllers.Application.wsEchoAsync
-GET     /time                       controllers.Application.wsTime
-GET     /pingpong                   controllers.Application.wsPingPong
-GET     /interleave                 controllers.Application.wsInterleave
-GET     /fromfile                   controllers.Application.wsFromFile
-GET     /wsWeather                  controllers.Application.wsWeatherProxy
-GET     /wsWeatherIntervals         controllers.Application.wsWeatherIntervals
-GET     /wsWithActor                controllers.Application.wsWithActor
+#GET     /echo                       controllers.Application.wsEcho
+# GET     /echoAsync                  controllers.Application.wsEchoAsync
+#GET     /echoAsync                  controllers.Application.wsAuth                  
 
+#GET     /time                       controllers.Application.wsTime
+#GET     /pingpong                   controllers.Application.wsPingPong
+#GET     /interleave                 controllers.Application.wsInterleave
+#GET     /fromfile                   controllers.Application.wsFromFile
+#GET     /wsWeather                  controllers.Application.wsWeatherProxy
+#GET     /wsWeatherIntervals         controllers.Application.wsWeatherIntervals
+#GET     /wsWithActor                controllers.Application.wsWithActor
+
+# Home page
+GET     /                                controllers.Application.index
+GET     /room                            controllers.Application.chatRoom(username: Option[String])
+GET     /room/chat                       controllers.Application.chat(username)
+GET     /assets/javascripts/chatroom.js  controllers.Application.chatRoomJs(username: String)
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)

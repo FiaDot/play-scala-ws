@@ -2,23 +2,66 @@ package controllers
 
 // import play.api._
 // import play.api.mvc._
- 
+
 import play.api.mvc._
-import play.api.libs.iteratee.{Iteratee, Concurrent, Enumerator}
+import play.api.libs.iteratee.{ Iteratee, Concurrent, Enumerator }
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import play.api.Logger
-import play.api.libs.concurrent.{Akka, Promise}
+import play.api.libs.concurrent.{ Akka, Promise }
 import java.io.File
 import play.api.libs.ws.WS
-import akka.actor.{Props, Actor}
+import akka.actor.{ Props, Actor }
 import akka.pattern.ask
 import java.util.concurrent.TimeoutException
 import play.api.Play.current
 
+// import WebSocketActor.MyWebSocketActor
+
+import play.api.libs.json._
+import play.api.libs.iteratee._
+
+import models._
+
+import akka.actor._
+import scala.concurrent.duration._
+
 object Application extends Controller {
 
+  /**
+   * Just display the home page.
+   */
+  def index = Action { implicit request =>
+    Ok(views.html.index())
+  }
+  
+  /**
+   * Display the chat room page.
+   */
+  def chatRoom(username: Option[String]) = Action { implicit request =>
+    username.filterNot(_.isEmpty).map { username =>
+      Ok(views.html.chatRoom(username))
+    }.getOrElse {
+      Redirect(routes.Application.index).flashing(
+        "error" -> "Please choose a valid username."
+      )
+    }
+  }
+
+  def chatRoomJs(username: String) = Action { implicit request =>
+    Ok(views.js.chatRoom(username))
+  }
+  
+  /**
+   * Handles the chat websocket.
+   */
+  def chat(username: String) = WebSocket.async[JsValue] { request  =>
+
+    ChatRoom.join(username)
+    
+  }
+  
 	/* 기본 코드 
   def index = Action {
     Ok(views.html.index("Your new application is ready."))
@@ -26,163 +69,181 @@ object Application extends Controller {
   
   */
 
+	/*
 	def index = Action {
 		Ok("I'm alive!\n")
 	}
 	
 	
+	
+	def wsAuth = WebSocket.acceptWithActor[String, String] {
+		request => out =>
+			MyWebSocketActor.props(out)
+	}
 
-  // endpoint that opens an echo websocket
-  def wsEcho = WebSocket.using[String] {
-    request => {
-      Logger.info(s"wsEcho, client connected.")
-      var channel: Option[Concurrent.Channel[String]] = None
-      val outEnumerator: Enumerator[String] = Concurrent.unicast(c => channel = Some(c))
+	
+	// endpoint that opens an echo websocket
+	def wsEcho = WebSocket.using[String] {
+		request =>
+			{
+				Logger.info(s"wsEcho, client connected.")
+				var channel: Option[Concurrent.Channel[String]] = None
+				val outEnumerator: Enumerator[String] = Concurrent.unicast(c => channel = Some(c))
 
-      val inIteratee: Iteratee[String, Unit] = Iteratee.foreach[String](receivedString => {
-        // send string back
-        Logger.info(s"wsEcho, received: $receivedString")
-        channel.foreach(_.push(receivedString))
-      })
+				val inIteratee: Iteratee[String, Unit] = Iteratee.foreach[String](receivedString => {
+					// send string back
+					Logger.info(s"wsEcho, received: $receivedString")
+					channel.foreach(_.push(receivedString))
+				})
 
-      (inIteratee, outEnumerator)
-    }
-  }
+				(inIteratee, outEnumerator)
+			}
+	}
 
-  // async version of the echo websocket -- code is exactly the same!
-  def wsEchoAsync = WebSocket.async[String] {
-    request => Future {
-      Logger.info(s"wsEchoAsync, client connected.")
-      var channel: Option[Concurrent.Channel[String]] = None
-      val outEnumerator: Enumerator[String] = Concurrent.unicast(c => channel = Some(c))
+	// async version of the echo websocket -- code is exactly the same!
+	def wsEchoAsync = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info(s"wsEchoAsync, client connected.")
+				var channel: Option[Concurrent.Channel[String]] = None
+				val outEnumerator: Enumerator[String] = Concurrent.unicast(c => channel = Some(c))
 
-      val inIteratee: Iteratee[String, Unit] = Iteratee.foreach[String](receivedString => {
-        // send string back
-        Logger.info(s"wsEchoAsync, received: $receivedString")
-        channel.foreach(_.push(receivedString))
-      })
+				val inIteratee: Iteratee[String, Unit] = Iteratee.foreach[String](receivedString => {
+					// send string back
+					Logger.info(s"wsEchoAsync, received: $receivedString")
+					channel.foreach(_.push(receivedString))
+				})
 
-      (inIteratee, outEnumerator)
-    }
-  }
+				(inIteratee, outEnumerator)
+			}
+	}
 
-  // sends the time every second, ignores any input
-  def wsTime = WebSocket.async[String] {
-    request => Future {
-      Logger.info(s"wsTime, client connected.")
+	// sends the time every second, ignores any input
+	def wsTime = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info(s"wsTime, client connected.")
 
-      val outEnumerator: Enumerator[String] = Enumerator.repeatM(Promise.timeout(s"${new java.util.Date()}", 1000))
-      val inIteratee: Iteratee[String, Unit] = Iteratee.ignore[String]
+				val outEnumerator: Enumerator[String] = Enumerator.repeatM(Promise.timeout(s"${new java.util.Date()}", 1000))
+				val inIteratee: Iteratee[String, Unit] = Iteratee.ignore[String]
 
-      (inIteratee, outEnumerator)
-    }
-  }
+				(inIteratee, outEnumerator)
+			}
+	}
 
-  // sends the time every second, ignores any input
-  def wsPingPong = WebSocket.async[String] {
-    request => Future {
-      Logger.info(s"wsPingPong, client connected.")
+	// sends the time every second, ignores any input
+	def wsPingPong = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info(s"wsPingPong, client connected.")
 
-      var switch: Boolean = true
-      val outEnumerator = Enumerator.repeatM[String](Promise.timeout({
-        switch = !switch
-        if (switch) "                <----- pong" else "ping ----->"
-      }, 1000))
+				var switch: Boolean = true
+				val outEnumerator = Enumerator.repeatM[String](Promise.timeout({
+					switch = !switch
+					if (switch) "                <----- pong" else "ping ----->"
+				}, 1000))
 
-      (Iteratee.ignore[String], outEnumerator)
-    }
-  }
+				(Iteratee.ignore[String], outEnumerator)
+			}
+	}
 
-  // interleaves two enumerators
-  def wsInterleave = WebSocket.async[String] {
-    request => Future {
-      Logger.info("wsInterleave, client connected")
-      val en1: Enumerator[String] = Enumerator.repeatM(Promise.timeout("AAAA", 2000))
-      val en2: Enumerator[String] = Enumerator.repeatM(Promise.timeout("BBBB", 1500))
-      (Iteratee.ignore[String], Enumerator.interleave(en1, en2))
-    }
-  }
+	// interleaves two enumerators
+	def wsInterleave = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info("wsInterleave, client connected")
+				val en1: Enumerator[String] = Enumerator.repeatM(Promise.timeout("AAAA", 2000))
+				val en2: Enumerator[String] = Enumerator.repeatM(Promise.timeout("BBBB", 1500))
+				(Iteratee.ignore[String], Enumerator.interleave(en1, en2))
+			}
+	}
 
-  // sends content from a file
-  def wsFromFile = WebSocket.async[Array[Byte]] {
-    request => Future {
-      Logger.info("wsFromFile, client connected")
-      val file: File = new File("test.txt")
-      val outEnumerator = Enumerator.fromFile(file)
-      (Iteratee.ignore[Array[Byte]], outEnumerator.andThen(Enumerator.eof))
-    }
-  }
+	// sends content from a file
+	def wsFromFile = WebSocket.async[Array[Byte]] {
+		request =>
+			Future {
+				Logger.info("wsFromFile, client connected")
+				val file: File = new File("test.txt")
+				val outEnumerator = Enumerator.fromFile(file)
+				(Iteratee.ignore[Array[Byte]], outEnumerator.andThen(Enumerator.eof))
+			}
+	}
 
+	def wsWithActor = WebSocket.async[String] {
+		request =>
+			{
+				Logger.info("wsWithActor, client connected")
+				val actor = Akka.system.actorOf(Props[WebsocketEchoActor])
+				(actor ? ClientConnected())(3 seconds).mapTo[(Iteratee[String, _], Enumerator[String])].recover {
+					case e: TimeoutException =>
+						// the actor didn't respond
+						Logger.error("actor didn't respond")
+						val out: Enumerator[String] = Enumerator.eof
+						val in: Iteratee[String, Unit] = Iteratee.ignore
+						(in, out)
+				}
+			}
+	}
 
-  def wsWithActor = WebSocket.async[String] {
-    request => {
-      Logger.info("wsWithActor, client connected")
-      val actor = Akka.system.actorOf(Props[WebsocketEchoActor])
-      (actor ? ClientConnected())(3 seconds).mapTo[(Iteratee[String, _], Enumerator[String])].recover {
-        case e: TimeoutException =>
-          // the actor didn't respond
-          Logger.error("actor didn't respond")
-          val out: Enumerator[String] = Enumerator.eof
-          val in: Iteratee[String, Unit] = Iteratee.ignore
-          (in, out)
-      }
-    }
-  }
+	case class Start()
 
-  case class Start()
+	case class ClientConnected()
 
-  case class ClientConnected()
+	class WebsocketEchoActor extends Actor {
 
-  class WebsocketEchoActor extends Actor {
+		override def receive = {
+			case ClientConnected() =>
+				var channel: Option[Concurrent.Channel[String]] = None
+				val out: Enumerator[String] = Concurrent.unicast(c => channel = Some(c))
+				val in = Iteratee.foreach[String](message => {
+					Logger.info(s"actor, received message: $message")
+					if (message == "fanculo") channel.foreach(_.eofAndEnd())
+					else channel.foreach(_.push(message))
+				})
+				sender ! (in, out)
+		}
+	}
 
-    override def receive = {
-      case ClientConnected() =>
-        var channel: Option[Concurrent.Channel[String]] = None
-        val out: Enumerator[String] = Concurrent.unicast(c => channel = Some(c))
-        val in = Iteratee.foreach[String](message => {
-          Logger.info(s"actor, received message: $message")
-          if (message == "fanculo") channel.foreach(_.eofAndEnd())
-          else channel.foreach(_.push(message))
-        })
-        sender !(in, out)
-    }
-  }
+	// proxies another webservice
+	def httpWeatherProxy = Action.async {
+		request =>
+			{
+				Logger.info("httpWeatherProxy, client connected")
+				val url = "http://api.openweathermap.org/data/2.5/weather?q=Amsterdam,nl"
+				WS.url(url).get().map(r => Ok(r.body))
+			}
+	}
 
-  // proxies another webservice
-  def httpWeatherProxy = Action.async {
-    request => {
-      Logger.info("httpWeatherProxy, client connected")
-      val url = "http://api.openweathermap.org/data/2.5/weather?q=Amsterdam,nl"
-      WS.url(url).get().map(r => Ok(r.body))
-    }
-  }
+	// proxies another webservice, websocket style
+	def wsWeatherProxy = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info("wsWeatherProxy, client connected")
+				val url = "http://api.openweathermap.org/data/2.5/weather?q=Amsterdam,nl"
+				var switch = false
+				val myEnumerator: Enumerator[String] = Enumerator.generateM[String](WS.url(url).get().map(r => {
+					switch = !switch
+					if (switch) Option(r.body)
+					else None
+				}))
+				(Iteratee.ignore[String], myEnumerator)
+			}
+	}
 
-  // proxies another webservice, websocket style
-  def wsWeatherProxy = WebSocket.async[String] {
-    request => Future {
-      Logger.info("wsWeatherProxy, client connected")
-      val url = "http://api.openweathermap.org/data/2.5/weather?q=Amsterdam,nl"
-      var switch = false
-      val myEnumerator: Enumerator[String] = Enumerator.generateM[String](WS.url(url).get().map(r => {
-        switch = !switch
-        if (switch) Option(r.body)
-        else None
-      }))
-      (Iteratee.ignore[String], myEnumerator)
-    }
-  }
+	// proxies another webservice at regular intervals
+	def wsWeatherIntervals = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info("wsWeatherIntervals, client connected")
+				val url = "http://api.openweathermap.org/data/2.5/weather?q=Amsterdam,nl"
+				val outEnumerator = Enumerator.repeatM[String]({
+					Thread.sleep(3000)
+					WS.url(url).get().map(r => s"${new java.util.Date()}\n ${r.body}")
+				})
 
-  // proxies another webservice at regular intervals
-  def wsWeatherIntervals = WebSocket.async[String] {
-    request => Future {
-      Logger.info("wsWeatherIntervals, client connected")
-      val url = "http://api.openweathermap.org/data/2.5/weather?q=Amsterdam,nl"
-      val outEnumerator = Enumerator.repeatM[String]({
-        Thread.sleep(3000)
-        WS.url(url).get().map(r => s"${new java.util.Date()}\n ${r.body}")
-      })
-
-      (Iteratee.ignore[String], outEnumerator)
-    }
-  }
+				(Iteratee.ignore[String], outEnumerator)
+			}
+	}
+	
+	*/
 }
