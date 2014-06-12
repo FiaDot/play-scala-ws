@@ -6,12 +6,12 @@
 #GET     /                           controllers.Application.index
 
 # Websocket endpoints
-#GET     /echo                       controllers.Application.wsEcho
+GET     /echo                       controllers.Application.wsEcho
 # GET     /echoAsync                  controllers.Application.wsEchoAsync
-#GET     /echoAsync                  controllers.Application.wsAuth                  
+GET     /echoAsync                  controllers.Application.wsAuth                  
 
-#GET     /time                       controllers.Application.wsTime
-#GET     /pingpong                   controllers.Application.wsPingPong
+GET     /time                       controllers.Application.wsTime
+GET     /pingpong                   controllers.Application.wsPingPong
 #GET     /interleave                 controllers.Application.wsInterleave
 #GET     /fromfile                   controllers.Application.wsFromFile
 #GET     /wsWeather                  controllers.Application.wsWeatherProxy

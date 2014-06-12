@@ -17,7 +17,7 @@ import akka.pattern.ask
 import java.util.concurrent.TimeoutException
 import play.api.Play.current
 
-// import WebSocketActor.MyWebSocketActor
+import WebSocketActor.MyWebSocketActor
 
 import play.api.libs.json._
 import play.api.libs.iteratee._
@@ -29,59 +29,46 @@ import scala.concurrent.duration._
 
 object Application extends Controller {
 
-  /**
-   * Just display the home page.
-   */
-  def index = Action { implicit request =>
-    Ok(views.html.index())
-  }
-  
-  /**
-   * Display the chat room page.
-   */
-  def chatRoom(username: Option[String]) = Action { implicit request =>
-    username.filterNot(_.isEmpty).map { username =>
-      Ok(views.html.chatRoom(username))
-    }.getOrElse {
-      Redirect(routes.Application.index).flashing(
-        "error" -> "Please choose a valid username."
-      )
-    }
-  }
-
-  def chatRoomJs(username: String) = Action { implicit request =>
-    Ok(views.js.chatRoom(username))
-  }
-  
-  /**
-   * Handles the chat websocket.
-   */
-  def chat(username: String) = WebSocket.async[JsValue] { request  =>
-
-    ChatRoom.join(username)
-    
-  }
-  
-	/* 기본 코드 
-  def index = Action {
-    Ok(views.html.index("Your new application is ready."))
-  }
-  
-  */
-
-	/*
-	def index = Action {
-		Ok("I'm alive!\n")
+	/**
+	 * Just display the home page.
+	 */
+	def index = Action { implicit request =>
+		Ok(views.html.index())
 	}
-	
-	
-	
-	def wsAuth = WebSocket.acceptWithActor[String, String] {
+
+	/**
+	 * Display the chat room page.
+	 */
+	def chatRoom(username: Option[String]) = Action { implicit request =>
+		username.filterNot(_.isEmpty).map { username =>
+			Ok(views.html.chatRoom(username))
+		}.getOrElse {
+			Redirect(routes.Application.index).flashing(
+				"error" -> "Please choose a valid username.")
+		}
+	}
+
+	def chatRoomJs(username: String) = Action { implicit request =>
+		Ok(views.js.chatRoom(username))
+	}
+
+	/**
+	 * Handles the chat websocket.
+	 */
+	def chat(username: String) = WebSocket.async[JsValue] { request =>
+
+		ChatRoom.join(username)
+
+	}
+  
+  	def wsAuth = WebSocket.acceptWithActor[String, String] {
+  		
+  		Logger.info(s"wsAuth, client connected.")
 		request => out =>
 			MyWebSocketActor.props(out)
 	}
-
-	
+  	
+  	
 	// endpoint that opens an echo websocket
 	def wsEcho = WebSocket.using[String] {
 		request =>
@@ -99,6 +86,56 @@ object Application extends Controller {
 				(inIteratee, outEnumerator)
 			}
 	}
+	
+	
+	// sends the time every second, ignores any input
+	def wsTime = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info(s"wsTime, client connected.")
+
+				val outEnumerator: Enumerator[String] = Enumerator.repeatM(Promise.timeout(s"${new java.util.Date()}", 1000))
+				val inIteratee: Iteratee[String, Unit] = Iteratee.ignore[String]
+
+				(inIteratee, outEnumerator)
+			}
+	}
+	
+		// sends the time every second, ignores any input
+	def wsPingPong = WebSocket.async[String] {
+		request =>
+			Future {
+				Logger.info(s"wsPingPong, client connected.")
+
+				var switch: Boolean = true
+				val outEnumerator = Enumerator.repeatM[String](Promise.timeout({
+					switch = !switch
+					if (switch) "                <----- pong" else "ping ----->"
+				}, 1000))
+
+				(Iteratee.ignore[String], outEnumerator)
+			}
+	}
+	
+	
+  	
+	/* 기본 코드 
+  def index = Action {
+    Ok(views.html.index("Your new application is ready."))
+  }
+  
+  */
+
+	/*
+	def index = Action {
+		Ok("I'm alive!\n")
+	}
+	
+	
+	
+
+
+	
 
 	// async version of the echo websocket -- code is exactly the same!
 	def wsEchoAsync = WebSocket.async[String] {
@@ -118,34 +155,8 @@ object Application extends Controller {
 			}
 	}
 
-	// sends the time every second, ignores any input
-	def wsTime = WebSocket.async[String] {
-		request =>
-			Future {
-				Logger.info(s"wsTime, client connected.")
 
-				val outEnumerator: Enumerator[String] = Enumerator.repeatM(Promise.timeout(s"${new java.util.Date()}", 1000))
-				val inIteratee: Iteratee[String, Unit] = Iteratee.ignore[String]
 
-				(inIteratee, outEnumerator)
-			}
-	}
-
-	// sends the time every second, ignores any input
-	def wsPingPong = WebSocket.async[String] {
-		request =>
-			Future {
-				Logger.info(s"wsPingPong, client connected.")
-
-				var switch: Boolean = true
-				val outEnumerator = Enumerator.repeatM[String](Promise.timeout({
-					switch = !switch
-					if (switch) "                <----- pong" else "ping ----->"
-				}, 1000))
-
-				(Iteratee.ignore[String], outEnumerator)
-			}
-	}
 
 	// interleaves two enumerators
 	def wsInterleave = WebSocket.async[String] {
